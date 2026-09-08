@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>&lt;camera&gt; element demo</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bd: color-mix(in srgb, currentColor 20%, transparent);
+        --dim: color-mix(in srgb, currentColor 62%, transparent);
+        --warn: #b3261e;
+      }
+      /* author rules outrank the UA's [hidden] rule, so restate it */
+      [hidden] {
+        display: none !important;
+      }
+      body {
+        font:
+          15px/1.6 system-ui,
+          sans-serif;
+        margin: 0 auto;
+        padding: 32px 20px 64px;
+        max-width: 640px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 0 0 6px;
+      }
+      p {
+        margin: 0 0 20px;
+        color: var(--dim);
+      }
+      /* The <camera> element is intentionally left unstyled: the user agent
+         validates and overrides its presentation, and custom styling is a
+         PEPC blocker that will refuse activation. */
+      #stage {
+        min-height: 60px;
+      }
+      video {
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        margin-top: 20px;
+        background: #000;
+        border-radius: 8px;
+        display: block;
+      }
+      #unsupported {
+        color: var(--warn);
+      }
+      footer {
+        margin-top: 28px;
+        padding-top: 16px;
+        border-top: 1px solid var(--bd);
+        font-size: 13px;
+      }
+      code {
+        font-family: ui-monospace, monospace;
+        font-size: 0.9em;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>The &lt;camera&gt; element</h1>
+    <p>
+      A declarative capture control. The browser owns the button and the
+      permission prompt, then hands the page a video track. Requires Chrome
+      version 153+.
+      <a href="https://webiterate.dev/capability-elements-camera-126/"
+        >Read More</a
+      >. Check
+      <a href="https://github.com/Web-Iterate/camera-element-demo"
+        >code on GitHub</a
+      >
+    </p>
+
+    <!-- Kept high in the page and free of layout shift: PEPC refuses
+         activation unless the element is fully visible and has been
+         stationary for ~500ms. -->
+    <div id="stage">
+      <camera id="cam">
+        <button>Turn on camera</button>
+      </camera>
+      <p id="unsupported" hidden>
+        This browser doesn't support <code>&lt;camera&gt;</code>. Try Chrome
+        152+.
+      </p>
+    </div>
+
+    <video id="preview" autoplay playsinline muted></video>
+
+    <footer>
+      Not working? <a href="debug.html">Open the debug page</a> for feature
+      detection, the element&rsquo;s API surface, and a live event log.
+    </footer>
+
+    <script>
+      const cam = document.getElementById("cam");
+      const preview = document.getElementById("preview");
+
+      if (!("HTMLCameraElement" in window)) {
+        cam.hidden = true;
+        preview.hidden = true;
+        document.getElementById("unsupported").hidden = false;
+        console.warn("<camera> is not supported in this browser.");
+      } else {
+        cam.setConstraints({ video: { width: 1280, height: 720 } });
+
+        // <camera> is a single-capability element: it fires "track" with a
+        // MediaStreamTrack. (<usermedia> is the multi-capability variant and
+        // fires "stream" with a MediaStream.) srcObject needs a MediaStream,
+        // so the track has to be wrapped.
+        cam.addEventListener("track", (event) => {
+          const track = cam.track ?? event.track;
+          if (!track) return;
+
+          preview.srcObject = new MediaStream([track]);
+          preview.play().catch((err) => {
+            console.error(`Preview did not start: ${err.name}`);
+          });
+        });
+
+        cam.addEventListener("error", () => {
+          console.error(`Camera unavailable: ${cam.error?.name}`);
+        });
+
+        cam.addEventListener("cancel", () => {
+          // Prompt dismissed without a choice — distinct from a denial,
+          // which getUserMedia() cannot tell you.
+        });
+      }
+    </script>
+  </body>
+</html>

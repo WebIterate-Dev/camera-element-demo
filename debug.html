@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>&lt;camera&gt; debug</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bd: color-mix(in srgb, currentColor 20%, transparent);
+        --dim: color-mix(in srgb, currentColor 62%, transparent);
+        --ok: #157f3b;
+        --no: #b3261e;
+      }
+      [hidden] { display: none !important; }
+      body {
+        font: 14px/1.55 system-ui, sans-serif;
+        margin: 0 auto; padding: 24px 20px 64px; max-width: 780px;
+      }
+      h1 { font-size: 18px; margin: 0 0 6px; }
+      h2 {
+        font-size: 12px; text-transform: uppercase; letter-spacing: .07em;
+        color: var(--dim); margin: 26px 0 8px;
+      }
+      p { color: var(--dim); margin: 0 0 16px; }
+      section { border: 1px solid var(--bd); border-radius: 8px; padding: 14px 16px; }
+      table { border-collapse: collapse; width: 100%; }
+      td { padding: 3px 0; vertical-align: top; }
+      td:first-child { width: 40%; color: var(--dim); padding-right: 12px; }
+      code, pre { font-family: ui-monospace, monospace; font-size: 12.5px; }
+      pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+      .dim { color: var(--dim); }
+      #vis { margin-top: 10px; }
+      .yes { color: var(--ok); font-weight: 600; }
+      .no  { color: var(--no); font-weight: 600; }
+      /* <camera> stays unstyled — the UA overrides its presentation and
+         author styling is a PEPC activation blocker. */
+      #stage { min-height: 60px; display: flex; align-items: center; gap: 14px; }
+      video {
+        width: 100%; max-width: 400px; aspect-ratio: 16/9; margin-top: 14px;
+        background: #000; border-radius: 6px; display: block;
+      }
+      button {
+        font: inherit; padding: 6px 14px; border-radius: 6px;
+        border: 1px solid var(--bd); background: transparent; color: inherit;
+        cursor: pointer;
+      }
+      #log { max-height: 240px; overflow-y: auto; }
+      #log div { padding: 2px 0; border-bottom: 1px solid var(--bd); }
+      #log div:last-child { border-bottom: 0; }
+      footer {
+        margin-top: 28px; padding-top: 16px;
+        border-top: 1px solid var(--bd); font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>&lt;camera&gt; debug</h1>
+    <p>
+      Capture control is first on the page deliberately: PEPC refuses
+      activation unless the element is fully in the viewport and has been
+      stationary for ~500&nbsp;ms. Don&rsquo;t scroll before clicking.
+    </p>
+
+    <section>
+      <div id="stage">
+        <camera id="cam"><button>Turn on camera</button></camera>
+        <span id="state" class="dim">idle</span>
+      </div>
+      <div id="vis"></div>
+      <video id="preview" autoplay playsinline muted></video>
+      <p style="margin:14px 0 0"><button id="stop" disabled>Stop stream</button></p>
+    </section>
+
+    <h2>Environment</h2>
+    <section>
+      <table>
+        <tr><td>HTMLCameraElement interface</td><td id="e-cam"></td></tr>
+        <tr><td>&lt;camera&gt; upgraded to it</td><td id="e-upg"></td></tr>
+        <tr><td>cam.setConstraints()</td><td id="e-sc"></td></tr>
+        <tr><td>HTMLMicrophoneElement</td><td id="e-mic"></td></tr>
+        <tr><td>HTMLUserMediaElement</td><td id="e-um"></td></tr>
+        <tr><td>Secure context</td><td id="e-sec"></td></tr>
+        <tr><td>Origin</td><td id="e-org"></td></tr>
+      </table>
+    </section>
+
+    <h2>HTMLCameraElement API surface</h2>
+    <section><pre id="api">&mdash;</pre></section>
+
+    <h2>setConstraints() shapes accepted</h2>
+    <section>
+      <table>
+        <tr><td><code>{ video: { width, height } }</code></td><td id="p-wrapped"></td></tr>
+        <tr><td><code>{ width, height }</code></td><td id="p-flat"></td></tr>
+      </table>
+    </section>
+
+    <h2>Granted track settings</h2>
+    <section><pre id="settings">&mdash; no stream yet &mdash;</pre></section>
+
+    <h2>Event log</h2>
+    <section><div id="log"></div></section>
+
+    <footer><a href="index.html">&larr; Back to the demo</a></footer>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const WANT = { width: 1280, height: 720 };
+      const hasIface = "HTMLCameraElement" in window;
+      const upgraded = hasIface && $("cam") instanceof HTMLCameraElement;
+      const hasSetC = typeof $("cam").setConstraints === "function";
+      // All three must hold; the interface alone is not enough.
+      const supported = hasIface && upgraded && hasSetC;
+      let active = null;
+
+      const mark = (el, ok, txt) => {
+        el.textContent = txt ?? (ok ? "present" : "absent");
+        el.className = ok ? "yes" : "no";
+      };
+
+      function log(kind, detail = "") {
+        const t = new Date().toLocaleTimeString([], { hour12: false });
+        const row = document.createElement("div");
+        row.textContent = `${t}  ${kind}${detail && "  " + detail}`;
+        $("log").prepend(row);
+      }
+
+      mark($("e-cam"), hasIface);
+      mark($("e-upg"), upgraded, upgraded ? "yes" : "no — element is inert");
+      mark($("e-sc"), hasSetC, hasSetC ? "function" : "missing");
+      mark($("e-mic"), "HTMLMicrophoneElement" in window);
+      mark($("e-um"), "HTMLUserMediaElement" in window);
+      mark($("e-sec"), isSecureContext, isSecureContext ? "yes" : "no — capture blocked");
+      $("e-org").textContent = location.origin;
+
+      if (!supported) {
+        $("cam").hidden = true;
+        $("preview").hidden = true;
+        $("stop").hidden = true;
+        $("state").hidden = true;
+        mark($("vis"), false,
+          hasIface
+            ? "<camera> is only partially enabled — interface present but the element is inert."
+            : "<camera> is not supported in this browser.");
+        for (const id of ["p-wrapped", "p-flat"]) $(id).textContent = "n/a";
+        $("api").textContent = "n/a";
+        log("unsupported", "nothing will run");
+      } else {
+        // Real API surface, straight from the build — not from documentation.
+        $("api").textContent = Object.getOwnPropertyNames(HTMLCameraElement.prototype)
+          .filter((n) => n !== "constructor")
+          .sort()
+          .join("   ");
+
+        // Which constraint shapes survive IDL conversion.
+        const probe = (shape) => {
+          try {
+            document.createElement("camera").setConstraints(shape);
+            return ["accepted", true];
+          } catch (err) {
+            return [`${err.name}: ${err.message}`, false];
+          }
+        };
+        mark($("p-wrapped"), ...probe({ video: WANT }).reverse());
+        mark($("p-flat"), ...probe({ ...WANT }).reverse());
+
+        // Mirrors the UA's own activation check (fully visible, -4px margin).
+        new IntersectionObserver(
+          ([e]) =>
+            mark(
+              $("vis"),
+              e.intersectionRatio >= 1,
+              e.intersectionRatio >= 1
+                ? "element fully visible — activation allowed"
+                : "not fully in viewport — PEPC will refuse activation"
+            ),
+          { threshold: [0, 0.99, 1], rootMargin: "-4px" }
+        ).observe($("cam"));
+
+        const cam = $("cam");
+        try {
+          cam.setConstraints({ video: WANT });
+          log("setConstraints", "{ video: { width, height } }");
+        } catch (err) {
+          log("setConstraints threw", `${err.name}: ${err.message}`);
+        }
+
+        // <camera> fires "track" with a MediaStreamTrack. "stream" is also
+        // bound so this page still works against <usermedia> semantics.
+        const onMedia = (evName) => (event) => {
+          const media = cam.track ?? event.track ?? cam.stream ?? event.stream;
+          log(`${evName} event`, media ? media.constructor.name : "no media found");
+          if (media) start(media);
+        };
+        cam.addEventListener("track", onMedia("track"));
+        cam.addEventListener("stream", onMedia("stream"));
+
+        cam.addEventListener("error", () => {
+          $("state").textContent = "error";
+          log("error", cam.error?.name ?? "(no .error)");
+        });
+        cam.addEventListener("cancel", () => {
+          $("state").textContent = "dismissed";
+          log("cancel", "prompt dismissed without a choice");
+        });
+
+        log("ready", "using <camera>");
+      }
+
+      // Accepts a MediaStreamTrack or a MediaStream.
+      async function start(media) {
+        const video = $("preview");
+        const stream =
+          media instanceof MediaStreamTrack ? new MediaStream([media]) : media;
+        const track = stream.getVideoTracks()[0];
+        if (!track) return log("no video track", "stream is empty");
+
+        active = stream;
+        $("stop").disabled = false;
+        $("state").textContent = "streaming";
+
+        const s = track.getSettings();
+        const hit = s.width === WANT.width && s.height === WANT.height;
+        $("settings").textContent =
+          `${s.width}x${s.height}  ${hit ? "✓ as requested" : "✗ not the requested 1280x720"}\n` +
+          `label: ${track.label}\nmuted: ${track.muted}\n\n` +
+          JSON.stringify(s, null, 2);
+        $("settings").className = hit ? "yes" : "no";
+        log("track", `${s.width}x${s.height} muted=${track.muted}`);
+        if (track.muted) log("track muted", "no frames — device may be in use");
+
+        track.addEventListener("ended", () => log("track ended"));
+        video.srcObject = stream;
+
+        try {
+          await video.play();
+        } catch (err) {
+          log("play() rejected", `${err.name}: ${err.message}`);
+          return;
+        }
+        setTimeout(() => {
+          log("video", `${video.videoWidth}x${video.videoHeight} paused=${video.paused}`);
+          if (!video.videoWidth) log("zero intrinsic size", "no frame decoded");
+        }, 600);
+      }
+
+      $("stop").addEventListener("click", () => {
+        active?.getTracks().forEach((t) => t.stop());
+        active = null;
+        $("preview").srcObject = null;
+        $("stop").disabled = true;
+        $("state").textContent = "stopped";
+        log("stopped", "tracks released");
+      });
+    </script>
+  </body>
+</html>
